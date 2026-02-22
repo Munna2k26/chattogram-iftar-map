@@ -1,40 +1,186 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Chattogram Iftar Map</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <style>
-    body{margin:0;font-family:Arial;}
-    #map{height:60vh;}
-    .green{background:#1f6f3d;color:white;padding:15px;}
-    .card{background:white;margin:10px;padding:10px;border-radius:8px;}
-  </style>
+<meta charset="utf-8" />
+<title>Chattogram Iftar Map</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+<style>
+body {
+  margin:0;
+  font-family: Arial, sans-serif;
+  background:#f5f5f5;
+}
+
+#topbar{
+  background:white;
+  padding:10px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  box-shadow:0 2px 4px rgba(0,0,0,0.1);
+}
+
+#searchInput{
+  flex:1;
+  padding:8px;
+  border-radius:6px;
+  border:1px solid #ccc;
+}
+
+#map{
+  height:60vh;
+}
+
+.green-bar{
+  background:#1e7e34;
+  color:white;
+  padding:12px;
+  font-weight:bold;
+}
+
+.card{
+  background:white;
+  margin:10px;
+  padding:12px;
+  border-radius:8px;
+  box-shadow:0 2px 4px rgba(0,0,0,0.1);
+}
+
+.vote{
+  margin-top:8px;
+}
+
+button{
+  padding:6px 10px;
+  border:none;
+  border-radius:6px;
+  cursor:pointer;
+}
+
+.btn-true{
+  background:#28a745;
+  color:white;
+}
+
+.btn-false{
+  background:#dc3545;
+  color:white;
+}
+
+.add-btn{
+  background:#007bff;
+  color:white;
+}
+.badge{
+  background:#28a745;
+  color:white;
+  padding:3px 6px;
+  border-radius:4px;
+  font-size:12px;
+}
+</style>
 </head>
+
 <body>
 
-<input id="searchBox" placeholder="এলাকা বা নাম খুঁজুন"/>
-<button onclick="search()">Search</button>
-
-<div id="map"></div>
-<div class="green">
-  <h3>আজকের সক্রিয় লোকেশন</h3>
-  <div id="list"></div>
+<div id="topbar">
+  <input id="searchInput" placeholder="মসজিদ বা এলাকা খুঁজুন..." />
+  <button class="add-btn" onclick="addLocation()">Add</button>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
+<div id="map"></div>
 
-const map = L.map('map').setView([22.3569,91.7832],12);
+<div class="green-bar">
+  আজকের সক্রিয় লোকেশন
+</div>
+
+<div id="list"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script>
+const map = L.map('map').setView([22.3569,91.7832], 12);
+
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
 .addTo(map);
 
-function render(loc){
-  L.marker([loc.lat,loc.lng]).addTo(map);
+let markers=[];
 
-  const div=document.createElement("div");
-  div.className="card";
-  div.innerHTML=`
-    <h4>${loc.title}</h4>
+async function loadLocations(){
+  const res = await fetch('/api/locations');
+  const data = await res.json();
+
+  document.getElementById('list').innerHTML='';
+  markers.forEach(m=>map.removeLayer(m));
+  markers=[];
+
+  data.forEach(loc=>{
+    const marker = L.marker([loc.lat,loc.lng])
+      .addTo(map)
+      .bindPopup(loc.name);
+    markers.push(marker);
+
+    const div = document.createElement('div');
+    div.className='card';
+    div.innerHTML=`
+      <b>${loc.name}</b>
+      ${loc.approved ? '<span class="badge">Verified</span>' : ''}
+      <div class="vote">
+        👍 ${loc.trueVotes || 0}
+        👎 ${loc.falseVotes || 0}
+      </div>
+      <button class="btn-true" onclick="vote('${loc._id}','true')">সত্যি</button>
+      <button class="btn-false" onclick="vote('${loc._id}','false')">ভুয়া</button>
+    `;
+    document.getElementById('list').appendChild(div);
+  });
+}
+
+async function vote(id,type){
+  await fetch(`/api/locations/vote/${id}`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({type})
+  });
+  loadLocations();
+}
+
+function addLocation(){
+  map.once('click',async function(e){
+    const name = prompt("লোকেশনের নাম লিখুন:");
+    if(!name) return;
+
+    await fetch('/api/locations',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        name,
+        lat:e.latlng.lat,
+        lng:e.latlng.lng
+      })
+    });
+
+    alert("Admin approval pending");
+    loadLocations();
+  });
+  alert("ম্যাপে ক্লিক করুন লোকেশন সিলেক্ট করতে");
+}
+
+document.getElementById('searchInput').addEventListener('input',function(){
+  const value=this.value.toLowerCase();
+  document.querySelectorAll('.card').forEach(card=>{
+    card.style.display = card.innerText.toLowerCase().includes(value)
+      ? 'block':'none';
+  });
+});
+
+loadLocations();
+</script>
+
+</body>
+</html>    <h4>${loc.title}</h4>
     <p>📍 ${loc.area}</p>
     <p>🟢 ${loc.trueCount} | 🔴 ${loc.fakeCount}</p>
     <button onclick="vote('${loc._id}','true')">সত্যি</button>
