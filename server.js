@@ -1,24 +1,21 @@
-import express from "express";
-import mongoose from "mongoose";
-import cors from "cors";
-import dotenv from "dotenv";
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+require("dotenv").config();
 
-import locationRoutes from "./routes/locationRoutes.js";
-import adminRoutes from "./routes/adminRoutes.js";
-
-dotenv.config();
+const locationRoutes = require("./routes/locationRoutes");
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
-app.use("/api/locations", locationRoutes);
-app.use("/api/admin", adminRoutes);
-
 mongoose.connect(process.env.MONGO_URI)
-.then(()=>console.log("Mongo Connected"))
-.catch(err=>console.log(err));
+.then(() => console.log("MongoDB Connected"))
+.catch(err => console.log(err));
+
+app.use("/api/locations", locationRoutes);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT,()=>console.log("Server Running"));
+app.listen(PORT, () => console.log("Server running on port " + PORT));
