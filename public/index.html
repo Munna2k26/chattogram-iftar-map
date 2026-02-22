@@ -1,84 +1,55 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="utf-8" />
+<meta charset="utf-8"/>
 <title>Chattogram Iftar Map</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
 <style>
-body {
-  margin:0;
-  font-family: Arial, sans-serif;
-  background:#f5f5f5;
-}
-
+body{margin:0;font-family:Arial;background:#f2f2f2;}
+#map{height:65vh;}
 #topbar{
   background:white;
   padding:10px;
   display:flex;
-  align-items:center;
   gap:10px;
-  box-shadow:0 2px 4px rgba(0,0,0,0.1);
+  box-shadow:0 2px 4px rgba(0,0,0,.1);
 }
-
-#searchInput{
+#search{
   flex:1;
   padding:8px;
   border-radius:6px;
   border:1px solid #ccc;
 }
-
-#map{
-  height:60vh;
-}
-
 .green-bar{
   background:#1e7e34;
   color:white;
-  padding:12px;
+  padding:10px;
   font-weight:bold;
 }
-
 .card{
   background:white;
   margin:10px;
   padding:12px;
   border-radius:8px;
-  box-shadow:0 2px 4px rgba(0,0,0,0.1);
+  box-shadow:0 2px 4px rgba(0,0,0,.1);
 }
-
-.vote{
-  margin-top:8px;
-}
-
 button{
   padding:6px 10px;
   border:none;
   border-radius:6px;
   cursor:pointer;
 }
-
-.btn-true{
-  background:#28a745;
-  color:white;
-}
-
-.btn-false{
-  background:#dc3545;
-  color:white;
-}
-
-.add-btn{
-  background:#007bff;
-  color:white;
-}
+.true{background:#28a745;color:white;}
+.false{background:#dc3545;color:white;}
 .badge{
   background:#28a745;
   color:white;
   padding:3px 6px;
   border-radius:4px;
   font-size:12px;
+  margin-left:6px;
 }
 </style>
 </head>
@@ -86,73 +57,70 @@ button{
 <body>
 
 <div id="topbar">
-  <input id="searchInput" placeholder="মসজিদ বা এলাকা খুঁজুন..." />
-  <button class="add-btn" onclick="addLocation()">Add</button>
+  <input id="search" placeholder="মসজিদ বা এলাকা খুঁজুন..."/>
 </div>
 
 <div id="map"></div>
 
-<div class="green-bar">
-  আজকের সক্রিয় লোকেশন
-</div>
-
+<div class="green-bar">আজকের সক্রিয় লোকেশন</div>
 <div id="list"></div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
-const map = L.map('map').setView([22.3569,91.7832], 12);
+const map=L.map('map').setView([22.3569,91.7832],12);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
 .addTo(map);
 
 let markers=[];
+let holdTimer=null;
 
-async function loadLocations(){
-  const res = await fetch('/api/locations');
-  const data = await res.json();
+/* ====== LOAD DATA ====== */
+async function load(){
+  const res=await fetch('/api/locations');
+  const data=await res.json();
 
   document.getElementById('list').innerHTML='';
   markers.forEach(m=>map.removeLayer(m));
   markers=[];
 
   data.forEach(loc=>{
-    const marker = L.marker([loc.lat,loc.lng])
-      .addTo(map)
-      .bindPopup(loc.name);
+    const marker=L.marker([loc.lat,loc.lng])
+    .addTo(map)
+    .bindPopup(loc.name);
     markers.push(marker);
 
-    const div = document.createElement('div');
+    const div=document.createElement('div');
     div.className='card';
     div.innerHTML=`
       <b>${loc.name}</b>
-      ${loc.approved ? '<span class="badge">Verified</span>' : ''}
-      <div class="vote">
-        👍 ${loc.trueVotes || 0}
-        👎 ${loc.falseVotes || 0}
-      </div>
-      <button class="btn-true" onclick="vote('${loc._id}','true')">সত্যি</button>
-      <button class="btn-false" onclick="vote('${loc._id}','false')">ভুয়া</button>
+      ${loc.approved?'<span class="badge">Verified</span>':''}
+      <div>👍 ${loc.trueVotes||0} 👎 ${loc.falseVotes||0}</div>
+      <button class="true" onclick="vote('${loc._id}','true')">সত্যি</button>
+      <button class="false" onclick="vote('${loc._id}','false')">ভুয়া</button>
     `;
     document.getElementById('list').appendChild(div);
   });
 }
 
+/* ====== VOTE ====== */
 async function vote(id,type){
-  await fetch(`/api/locations/vote/${id}`,{
+  await fetch('/api/locations/vote/'+id,{
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({type})
   });
-  loadLocations();
+  load();
 }
 
-function addLocation(){
-  map.once('click',async function(e){
-    const name = prompt("লোকেশনের নাম লিখুন:");
-    if(!name) return;
+/* ====== LONG PRESS ADD ====== */
+map.on('mousedown',function(e){
+  holdTimer=setTimeout(()=>{
+    const name=prompt("লোকেশনের নাম লিখুন:");
+    if(!name)return;
 
-    await fetch('/api/locations',{
+    fetch('/api/locations',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
@@ -160,69 +128,33 @@ function addLocation(){
         lat:e.latlng.lat,
         lng:e.latlng.lng
       })
+    }).then(()=>{
+      alert("Admin approval pending");
+      load();
     });
+  },800); // 0.8 second hold
+});
 
-    alert("Admin approval pending");
-    loadLocations();
-  });
-  alert("ম্যাপে ক্লিক করুন লোকেশন সিলেক্ট করতে");
-}
+map.on('mouseup',function(){
+  clearTimeout(holdTimer);
+});
 
-document.getElementById('searchInput').addEventListener('input',function(){
-  const value=this.value.toLowerCase();
-  document.querySelectorAll('.card').forEach(card=>{
-    card.style.display = card.innerText.toLowerCase().includes(value)
-      ? 'block':'none';
+map.on('mouseout',function(){
+  clearTimeout(holdTimer);
+});
+
+/* ====== SEARCH ====== */
+document.getElementById('search')
+.addEventListener('input',function(){
+  const val=this.value.toLowerCase();
+  document.querySelectorAll('.card').forEach(c=>{
+    c.style.display=c.innerText.toLowerCase().includes(val)
+    ?'block':'none';
   });
 });
 
-loadLocations();
-</script>
-
-</body>
-</html>    <h4>${loc.title}</h4>
-    <p>📍 ${loc.area}</p>
-    <p>🟢 ${loc.trueCount} | 🔴 ${loc.fakeCount}</p>
-    <button onclick="vote('${loc._id}','true')">সত্যি</button>
-    <button onclick="vote('${loc._id}','fake')">ভুয়া</button>
-  `;
-  document.getElementById("list").appendChild(div);
-}
-
-async function load(){
-  const res=await fetch("/api/locations");
-  const data=await res.json();
-  data.forEach(render);
-}
-
-async function search(){
-  const val=document.getElementById("searchBox").value;
-  const res=await fetch("/api/locations?search="+val);
-  const data=await res.json();
-  document.getElementById("list").innerHTML="";
-  data.forEach(render);
-}
-
-async function vote(id,type){
-  if(localStorage.getItem("voted_"+id)){
-    alert("তুমি ইতিমধ্যে ভোট দিয়েছো");
-    return;
-  }
-
-  const res=await fetch("/api/locations/vote/"+id,{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({type})
-  });
-
-  if(res.ok){
-    localStorage.setItem("voted_"+id,true);
-    location.reload();
-  }
-}
-
 load();
-
 </script>
+
 </body>
 </html>
