@@ -1,56 +1,59 @@
-import express from "express";
-import Location from "../models/Location.js";
-
+const express = require('express');
 const router = express.Router();
+const Location = require('../models/Location');
 
-// Submit
-router.post("/", async (req,res)=>{
-  const location = new Location(req.body);
-  await location.save();
-  res.json({message:"Submitted for approval"});
-});
+/* ===== GET ALL APPROVED ===== */
+router.get('/', async (req, res) => {
+  const data = await Location.find({
+    approved: true,
+    createdAt: { $gte: new Date(Date.now() - 24*60*60*1000) }
+  }).sort({ createdAt: -1 });
 
-// Get approved + not expired + search
-router.get("/", async (req,res)=>{
-  const { search } = req.query;
-
-  let filter = {
-    status:"approved",
-    expireAt: { $gt: new Date() }
-  };
-
-  if(search){
-    filter.$or = [
-      { title: { $regex: search, $options:"i"} },
-      { area: { $regex: search, $options:"i"} }
-    ];
-  }
-
-  const data = await Location.find(filter);
   res.json(data);
 });
 
-// Vote
-router.post("/vote/:id", async(req,res)=>{
-  const { type } = req.body;
-  const ip =
-    req.headers["x-forwarded-for"]?.split(",")[0] ||
-    req.socket.remoteAddress;
+/* ===== SEARCH ===== */
+router.get('/search', async (req, res) => {
+  const q = req.query.q || "";
 
-  const location = await Location.findById(req.params.id);
-  if(!location) return res.status(404).json({message:"Not found"});
+  const data = await Location.find({
+    approved: true,
+    name: { $regex: q, $options: 'i' },
+    createdAt: { $gte: new Date(Date.now() - 24*60*60*1000) }
+  });
 
-  if(location.voters.includes(ip)){
-    return res.status(400).json({message:"Already voted"});
-  }
-
-  if(type==="true") location.trueCount++;
-  if(type==="fake") location.fakeCount++;
-
-  location.voters.push(ip);
-  await location.save();
-
-  res.json({message:"Vote Counted"});
+  res.json(data);
 });
 
-export default router;
+/* ===== ADD ===== */
+router.post('/', async (req, res) => {
+  const { name, lat, lng } = req.body;
+
+  const newLoc = new Location({
+    name,
+    lat,
+    lng,
+    approved: false,
+    trueVotes: 0,
+    falseVotes: 0
+  });
+
+  await newLoc.save();
+  res.json({ message: "Submitted for approval" });
+});
+
+/* ===== VOTE ===== */
+router.post('/vote/:id', async (req, res) => {
+  const { type } = req.body;
+
+  const loc = await Location.findById(req.params.id);
+  if (!loc) return res.status(404).json({ message: "Not found" });
+
+  if (type === 'true') loc.trueVotes++;
+  if (type === 'false') loc.falseVotes++;
+
+  await loc.save();
+  res.json({ message: "Voted" });
+});
+
+module.exports = router;
