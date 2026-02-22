@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Chattogram Iftar Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    body{margin:0;font-family:Arial;}
+    #map{height:60vh;}
+    .green{background:#1f6f3d;color:white;padding:15px;}
+    .card{background:white;margin:10px;padding:10px;border-radius:8px;}
+  </style>
+</head>
+<body>
+
+<input id="searchBox" placeholder="এলাকা বা নাম খুঁজুন"/>
+<button onclick="search()">Search</button>
+
+<div id="map"></div>
+<div class="green">
+  <h3>আজকের সক্রিয় লোকেশন</h3>
+  <div id="list"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+
+const map = L.map('map').setView([22.3569,91.7832],12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
+.addTo(map);
+
+function render(loc){
+  L.marker([loc.lat,loc.lng]).addTo(map);
+
+  const div=document.createElement("div");
+  div.className="card";
+  div.innerHTML=`
+    <h4>${loc.title}</h4>
+    <p>📍 ${loc.area}</p>
+    <p>🟢 ${loc.trueCount} | 🔴 ${loc.fakeCount}</p>
+    <button onclick="vote('${loc._id}','true')">সত্যি</button>
+    <button onclick="vote('${loc._id}','fake')">ভুয়া</button>
+  `;
+  document.getElementById("list").appendChild(div);
+}
+
+async function load(){
+  const res=await fetch("/api/locations");
+  const data=await res.json();
+  data.forEach(render);
+}
+
+async function search(){
+  const val=document.getElementById("searchBox").value;
+  const res=await fetch("/api/locations?search="+val);
+  const data=await res.json();
+  document.getElementById("list").innerHTML="";
+  data.forEach(render);
+}
+
+async function vote(id,type){
+  if(localStorage.getItem("voted_"+id)){
+    alert("তুমি ইতিমধ্যে ভোট দিয়েছো");
+    return;
+  }
+
+  const res=await fetch("/api/locations/vote/"+id,{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({type})
+  });
+
+  if(res.ok){
+    localStorage.setItem("voted_"+id,true);
+    location.reload();
+  }
+}
+
+load();
+
+</script>
+</body>
+</html>
