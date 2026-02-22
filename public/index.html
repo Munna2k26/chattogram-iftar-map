@@ -8,102 +8,19 @@
 
 <style>
 body{margin:0;font-family:Arial;background:#f3f4f6;}
-
-/* IP BAR */
-#ipBar{
-  text-align:center;
-  padding:6px;
-  font-size:13px;
-  background:#111;
-  color:#fff;
-}
-
-/* HEADER */
-#header{
-  background:#fff;
-  padding:10px 15px;
-  display:flex;
-  align-items:center;
-  gap:15px;
-  box-shadow:0 2px 4px rgba(0,0,0,.1);
-}
-
-#logo{
-  font-weight:bold;
-  font-size:14px;
-  color:#1e7e34;
-}
-
-#search{
-  flex:1;
-  padding:10px;
-  border-radius:8px;
-  border:1px solid #ccc;
-  font-size:16px;
-}
-
-/* MAP */
+#ipBar{text-align:center;padding:6px;background:#111;color:#fff;font-size:13px;}
+#header{background:#fff;padding:10px;display:flex;align-items:center;gap:15px;box-shadow:0 2px 4px rgba(0,0,0,.1);}
+#logo{font-size:14px;font-weight:bold;color:#1e7e34;}
+#search{flex:1;padding:10px;border-radius:8px;border:1px solid #ccc;font-size:16px;}
 #map{height:60vh;}
-
-/* GREEN BAR */
-.green-bar{
-  background:#1e7e34;
-  color:#fff;
-  padding:12px 15px;
-  font-weight:bold;
-  display:flex;
-  justify-content:space-between;
-}
-
-/* CARD */
-.card{
-  background:#fff;
-  margin:12px;
-  padding:12px;
-  border-radius:10px;
-  box-shadow:0 2px 6px rgba(0,0,0,.08);
-}
-
-.card-top{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-}
-
-.badge{
-  background:#28a745;
-  color:#fff;
-  padding:3px 7px;
-  font-size:12px;
-  border-radius:6px;
-}
-
-.vote{
-  margin-top:8px;
-  display:flex;
-  gap:10px;
-}
-
-.vote button{
-  border:none;
-  padding:6px 10px;
-  border-radius:6px;
-  cursor:pointer;
-  font-size:14px;
-}
-
+.green-bar{background:#1e7e34;color:#fff;padding:12px;font-weight:bold;display:flex;justify-content:space-between;}
+.card{background:#fff;margin:12px;padding:12px;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,.08);}
+.card-top{display:flex;justify-content:space-between;}
+.badge{background:#28a745;color:#fff;padding:3px 6px;border-radius:6px;font-size:12px;}
+.vote{margin-top:8px;display:flex;gap:10px;}
+.vote button{padding:6px 10px;border:none;border-radius:6px;cursor:pointer;}
 .true{background:#28a745;color:#fff;}
 .false{background:#dc3545;color:#fff;}
-
-.addPopupBtn{
-  background:#007bff;
-  color:white;
-  padding:6px 10px;
-  border:none;
-  border-radius:6px;
-  margin-top:5px;
-  cursor:pointer;
-}
 </style>
 </head>
 
@@ -132,16 +49,16 @@ const map=L.map('map').setView([22.3569,91.7832],12);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
 let markers=[];
-let holdTimer=null;
+let pressTimer;
 
-/* ===== IP FETCH ===== */
+/* ===== IP ===== */
 fetch("https://api.ipify.org?format=json")
 .then(res=>res.json())
 .then(data=>{
   document.getElementById("ipBar").innerText="Your IP: "+data.ip;
 });
 
-/* ===== LOAD LOCATIONS ===== */
+/* ===== LOAD ===== */
 async function load(query=""){
   let url='/api/locations';
   if(query) url='/api/locations/search?q='+query;
@@ -149,6 +66,11 @@ async function load(query=""){
   const res=await fetch(url);
   const data=await res.json();
 
+  render(data);
+}
+
+/* ===== RENDER ===== */
+function render(data){
   document.getElementById('list').innerHTML='';
   document.getElementById('count').innerText=data.length+" টি";
 
@@ -156,8 +78,7 @@ async function load(query=""){
   markers=[];
 
   data.forEach(loc=>{
-    const marker=L.marker([loc.lat,loc.lng]).addTo(map)
-    .bindPopup(loc.name);
+    const marker=L.marker([loc.lat,loc.lng]).addTo(map);
     markers.push(marker);
 
     const div=document.createElement('div');
@@ -181,8 +102,9 @@ async function load(query=""){
 }
 
 /* ===== SEARCH ===== */
-document.getElementById('search')
-.addEventListener('input',function(){
+document.getElementById('search').addEventListener('focus',()=>map.dragging.disable());
+document.getElementById('search').addEventListener('blur',()=>map.dragging.enable());
+document.getElementById('search').addEventListener('input',function(){
   load(this.value);
 });
 
@@ -197,24 +119,33 @@ async function vote(id,type){
 }
 
 /* ===== LONG PRESS ADD ===== */
-map.on('touchstart mousedown',function(e){
-  holdTimer=setTimeout(()=>{
-    const popup=L.popup()
-    .setLatLng(e.latlng)
+map.on('mousedown',startPress);
+map.on('mouseup',cancelPress);
+map.on('mouseout',cancelPress);
+map.on('touchstart',startPress);
+map.on('touchend',cancelPress);
+
+function startPress(e){
+  pressTimer=setTimeout(()=>{
+    showAdd(e.latlng);
+  },600);
+}
+
+function cancelPress(){
+  clearTimeout(pressTimer);
+}
+
+function showAdd(latlng){
+  L.popup()
+    .setLatLng(latlng)
     .setContent(`
-      <button class="addPopupBtn" onclick="addLocation(${e.latlng.lat},${e.latlng.lng})">
+      <button onclick="addLocation(${latlng.lat},${latlng.lng})">
       এখানে লোকেশন যোগ করুন
       </button>
     `)
     .openOn(map);
-  },700);
-});
+}
 
-map.on('touchend mouseup mouseout',function(){
-  clearTimeout(holdTimer);
-});
-
-/* ===== ADD ===== */
 async function addLocation(lat,lng){
   const name=prompt("লোকেশনের নাম লিখুন:");
   if(!name) return;
